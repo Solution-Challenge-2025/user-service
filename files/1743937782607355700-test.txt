@@ -1,0 +1,6 @@
+﻿This is a test file
+Created at: 04/06/2025 16:39:42
+Contains some sample content
+Line 1
+Line 2
+Line 3

@@ -15,10 +15,10 @@ import (
 
 type FileService struct {
 	repo    *repository.FileRepository
-	storage *storage.GCSStorage
+	storage storage.Storage
 }
 
-func NewFileService(repo *repository.FileRepository, storage *storage.GCSStorage) *FileService {
+func NewFileService(repo *repository.FileRepository, storage storage.Storage) *FileService {
 	return &FileService{
 		repo:    repo,
 		storage: storage,

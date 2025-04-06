@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"user-service/internal/handlers"
 	"user-service/internal/repository"
 	"user-service/internal/service"
@@ -31,23 +32,52 @@ func main() {
 	// Get database
 	db := mongoClient.Database("analyticsai")
 
-	// Initialize Google Cloud Storage
-	gcsConfig := storage.GCSConfig{
-		ProjectID:       os.Getenv("GCS_PROJECT_ID"),
-		BucketName:      os.Getenv("GCS_BUCKET_NAME"),
-		CredentialsFile: os.Getenv("GCS_CREDENTIALS_FILE"),
-	}
-
-	gcsStorage, err := storage.NewGCSStorage(gcsConfig)
-	if err != nil {
-		log.Fatalf("Failed to initialize GCS storage: %v", err)
+	// Initialize storage
+	var fileStorage storage.Storage
+	if os.Getenv("USE_LOCAL_STORAGE") == "true" {
+		// Use local storage
+		baseDir := os.Getenv("LOCAL_STORAGE_DIR")
+		if baseDir == "" {
+			baseDir = filepath.Join(os.TempDir(), "analyticsai-files")
+		}
+		localStorage, err := storage.NewLocalStorage(storage.LocalStorageConfig{
+			BaseDir: baseDir,
+		})
+		if err != nil {
+			log.Fatalf("Failed to initialize local storage: %v", err)
+		}
+		fileStorage = localStorage
+		log.Printf("Using local storage at: %s", baseDir)
+	} else {
+		// Use GCS storage
+		gcsConfig := storage.GCSConfig{
+			ProjectID:       os.Getenv("GCS_PROJECT_ID"),
+			BucketName:      os.Getenv("GCS_BUCKET_NAME"),
+			CredentialsFile: os.Getenv("GCS_CREDENTIALS_FILE"),
+		}
+		gcsStorage, err := storage.NewGCSStorage(gcsConfig)
+		if err != nil {
+			log.Printf("Failed to initialize GCS storage, falling back to local storage: %v", err)
+			baseDir := filepath.Join(os.TempDir(), "analyticsai-files")
+			localStorage, err := storage.NewLocalStorage(storage.LocalStorageConfig{
+				BaseDir: baseDir,
+			})
+			if err != nil {
+				log.Fatalf("Failed to initialize local storage: %v", err)
+			}
+			fileStorage = localStorage
+			log.Printf("Using local storage at: %s", baseDir)
+		} else {
+			fileStorage = gcsStorage
+			log.Printf("Using GCS storage with bucket: %s", gcsConfig.BucketName)
+		}
 	}
 
 	// Initialize repositories
 	fileRepo := repository.NewFileRepository(db)
 
 	// Initialize services
-	fileService := service.NewFileService(fileRepo, gcsStorage)
+	fileService := service.NewFileService(fileRepo, fileStorage)
 
 	// Initialize handlers
 	fileHandler := handlers.NewFileHandler(fileService)
